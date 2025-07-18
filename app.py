@@ -1,231 +1,87 @@
-from flask import Flask, request
-import requests
-from threading import Thread, Event
-import time
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
+import os
+from flask import render_template_string
 
 app = Flask(__name__)
-app.debug = True
+CORS(app)
 
-headers = {
-    'Connection': 'keep-alive',
-    'Cache-Control': 'max-age=0',
-    'Upgrade-Insecure-Requests': '1',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.76 Safari/537.36',
-    'user-agent': 'Mozilla/5.0 (Linux; Android 11; TECNO CE7j) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.40 Mobile Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Encoding': 'gzip, deflate',
-    'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
-    'referer': 'www.google.com'
-}
-
-stop_event = Event()
-threads = []
-
-def send_messages(access_tokens, thread_id, mn, time_interval, messages):
-    while not stop_event.is_set():
-        for message1 in messages:
-            if stop_event.is_set():
-                break
-            for access_token in access_tokens:
-                api_url = f'https://graph.facebook.com/v15.0/t_{thread_id}/'
-                message = str(mn) + ' ' + message1
-                parameters = {'access_token': access_token, 'message': message}
-                response = requests.post(api_url, data=parameters, headers=headers)
-                if response.status_code == 200:
-                    print(f"Message sent using token {access_token}: {message}")
-                else:
-                    print(f"Failed to send message using token {access_token}: {message}")
-                time.sleep(time_interval)
-
-@app.route('/', methods=['GET', 'POST'])
-def send_message():
-    global threads
-    if request.method == 'POST':
-        token_file = request.files['tokenFile']
-        access_tokens = token_file.read().decode().strip().splitlines()
-
-        thread_id = request.form.get('threadId')
-        mn = request.form.get('kidx')
-        time_interval = int(request.form.get('time'))
-
-        txt_file = request.files['txtFile']
-        messages = txt_file.read().decode().splitlines()
-
-        if not any(thread.is_alive() for thread in threads):
-            stop_event.clear()
-            thread = Thread(target=send_messages, args=(access_tokens, thread_id, mn, time_interval, messages))
-            threads.append(thread)
-            thread.start()
-
-    return '''
-<!DOCTYPE html>
-<html lang="en">
+# Serve the HTML content directly
+html_content = """<!DOCTYPE html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp Messaging App</title>
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/sweetalert/1.1.3/sweetalert.css">
-    <style>
-        body {
-            font-family: 'Roboto', sans-serif;
-            background-color: #f4f4f4;
-            color: #333;
-            line-height: 1.6;
-        }
-        header {
-            b* Primary color */
-            color: #fff;
-            padding: 20px 0;
-            text-align: center;
-            margin-bottom: 30px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            margin: 0 0 15px;
-        }
-        h2 {
-            margin-bottom: 20px;
-        }
-        form {
-            background: #fff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-            margin: 20px auto;
-            max-width: 700px;
-            display: none; /* Hide forms initially */
-            transition: all 0.3s;
-        }
-        .btn-custom {
-            background-color: #007bff; /* Primary color */
-            color: white;
-            text-transform: uppercase;
-            border-radius: 25px;
-            padding: 10px 20px;
-            margin: 10px 0;
-            transition: background-color 0.3s, box-shadow 0.3s;
-        }
-        .btn-custom:hover {
-            background-color: #0056b3; /* Darker shade */
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-        }
-        .form-control, .form-control-file {
-            border-radius: 5px;
-            border: 1px solid #ced4da;
-            transition: border-color 0.3s;
-            margin-bottom: 15px; /* Add space between inputs */
-        }
-        .form-control:focus {
-            border-color: #007bff;
-            box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
-        }
-        .file-name {
-            font-size: 0.9rem;
-            color: #6c757d;
-            margin-bottom: 15px;
-        }
-        @media (max-width: 768px) {
-            form {
-                padding: 20px;
-            }
-        }
-        h4{
-            font-size: 13px;
-        }
-    </style>
+    <title>WhatsApp Automation</title>
 </head>
 <body>
+    <h1>WhatsApp Automation</h1>
+    
+    <h2>Login to WhatsApp</h2>
+    <button onclick="login()">Login with QR Code</button>
+    <p id="qr"></p>
 
-    <header>
-        <h1>THEW MOZZ WHATSAPP SERVER</h1>
-        <button id="startSessionBtn" class="btn btn-custom">Start Messaging</button>
-        <button id="stopSessionBtn" class="btn btn-custom">Stop Messaging</button>
-    </header>
+    <h2>Send a Message</h2>
+    <input type="text" id="target" placeholder="Enter Mobile Number">
+    <input type="text" id="message" placeholder="Enter Message">
+    <button onclick="sendMessage()">Send</button>
 
-    <form id="sessionForm">
-        <h2 class="text-center">OFFLINE WHATSAPP CHAT </h2>
-        <input type="text" class="form-control" name="name" placeholder="Your Name" required>
-        <input type="text" class="form-control" name="targetNumber" placeholder="Target Phone Number" required>
-        <select class="form-control" name="targetType" required>
-            <option value="">Select Target Type</option>
-            <option value="single">contact</option>
-            <option value="group">Group</option>
-        </select>
-        <h4>input creds.json</h4>
-        <input type="file" class="form-control-file" name="creds" accept=".json" required onchange="updateFileName(this)">
-        
-        <div class="file-name" id="credsFileName">No file chosen</div>
-        <h4>input message file path</h4>
-        <input type="file" class="form-control-file" name="messageFile" accept=".txt" required onchange="updateFileName(this)">
-        <div class="file-name" id="messageFileName">No file chosen</div>
-        <input type="number" class="form-control" name="delayTime" placeholder="Delay Time (seconds)" required>
-        <button type="submit" class="btn btn-custom btn-block">Start Session</button>
-    </form>
+    <h2>Send Messages from File</h2>
+    <input type="file" id="file">
+    <button onclick="sendFile()">Upload & Send</button>
 
-    <form id="stopSessionForm">
-        <h2 class="text-center">Stop Session</h2>
-        <input type="text" class="form-control" name="sessionId" placeholder="Session ID" required>
-        <button type="submit" class="btn btn-danger btn-block">Stop Session</button>
-    </form>
-
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert/1.1.3/sweetalert.min.js"></script>
     <script>
-        document.getElementById('startSessionBtn').onclick = function() {
-            document.getElementById('sessionForm').style.display = 'block';
-            document.getElementById('stopSessionForm').style.display = 'none';
-        };
+        function login() {
+            fetch('/login')
+                .then(response => response.json())
+                .then(data => document.getElementById('qr').innerText = "Scan QR: " + data.qr);
+        }
 
-        document.getElementById('stopSessionBtn').onclick = function() {
-            document.getElementById('stopSessionForm').style.display = 'block';
-            document.getElementById('sessionForm').style.display = 'none';
-        };
+        function sendMessage() {
+            let target = document.getElementById("target").value;
+            let message = document.getElementById("message").value;
+            fetch("/send-message", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({target, message})
+            });
+        }
 
-        document.getElementById('sessionForm').addEventListener('submit', async function (e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            try {
-                const response = await fetch('/send-message', {
-                    method: 'POST',
-                    body: formData
-                });
-                const result = await response.text();
-                swal("Success", result, "success");
-            } catch (error) {
-                swal("Error", "An error occurred while starting the session.", "error");
-            }
-        });
-
-        document.getElementById('stopSessionForm').addEventListener('submit', async function (e) {
-            e.preventDefault();
-            const sessionId = this.sessionId.value;
-            try {
-                const response = await fetch(`/stop-session/${sessionId}`, {
-                    method: 'POST'
-                });
-                const result = await response.text();
-                swal("Success", result, "success");
-            } catch (error) {
-                swal("Error", "An error occurred while stopping the session.", "error");
-            }
-        });
-
-        function updateFileName(input) {
-            const fileName = input.files[0] ? input.files[0].name : 'No file chosen';
-            const id = input.name === 'creds' ? 'credsFileName' : 'messageFileName';
-            document.getElementById(id).textContent = fileName;
+        function sendFile() {
+            let file = document.getElementById("file").files[0];
+            let formData = new FormData();
+            formData.append("file", file);
+            fetch("/send-from-file", { method: "POST", body: formData });
         }
     </script>
 </body>
-</html>
-    '''
+</html>"""
 
-@app.route('/stop', methods=['POST'])
-def stop_sending():
-    stop_event.set()
-    return 'Message sending stopped.'
+@app.route('/')
+def home():
+    return render_template_string(html_content)
+
+@app.route('/login', methods=['GET'])
+def login():
+    # Simulate QR code response (replace with actual implementation)
+    return jsonify({"qr": "123456"})
+
+@app.route('/send-message', methods=['POST'])
+def send_message():
+    data = request.json
+    target = data.get('target')
+    message = data.get('message')
+    # Implement actual WhatsApp sending logic here
+    return jsonify({"status": "Message sent to " + target})
+
+@app.route('/send-from-file', methods=['POST'])
+def send_from_file():
+    file = request.files.get('file')
+    if file:
+        filepath = os.path.join("uploads", file.filename)
+        file.save(filepath)
+        # Process the file and send messages
+        return jsonify({"status": "File received and processed"})
+    return jsonify({"error": "No file uploaded"})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
-    
+    app.run(host='0.0.0.0', port=5000, debug=True)
+
