@@ -1,10 +1,22 @@
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
-import os
-from flask import render_template_string
+from flask import Flask, request
+import requests
+from threading import Thread, Event
+import time
 
 app = Flask(__name__)
-CORS(app)
+app.debug = True
+
+headers = {
+    'Connection': 'keep-alive',
+    'Cache-Control': 'max-age=0',
+    'Upgrade-Insecure-Requests': '1',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.76 Safari/537.36',
+    'user-agent': 'Mozilla/5.0 (Linux; Android 11; TECNO CE7j) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.40 Mobile Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Encoding': 'gzip, deflate',
+    'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
+    'referer': 'www.google.com'
+}
 
 # Serve the HTML content directly
 html_content = """<!DOCTYPE html>
